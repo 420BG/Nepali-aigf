@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nepali AI GF</title>
+    <!-- Three.js Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- Payment Integration -->
+    <script src="https://khalti.s3.ap-south-1.amazonaws.com/KPG/dist/2020.12.17.0.0.0/khalti-checkout.iffe.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <style>
+        /* UI Styling */
+        .game-ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            z-index: 100;
+        }
+        
+        .store-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            color: white;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-ui">
+        <div>Coins: <span id="coin-counter">0</span></div>
+        <button onclick="showStore()">Store</button>
+    </div>
+
+    <div class="store-modal" id="store">
+        <h3>Virtual Store</h3>
+        <div class="store-item" onclick="buyItem('chocolate', 20)">
+            🍫 Chocolate (20 Coins)
+        </div>
+        <div class="store-item" onclick="buyItem('ring', 50)">
+            💍 Ring (50 Coins)
+        </div>
+        <button onclick="addCoins()">Buy Coins via Khalti</button>
+        <button onclick="hideStore()">Close</button>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // User State Management
+        let user = {
+            coins: 0,
+            happiness: 50,
+            inventory: []
+        };
+
+        // Khalti Configuration
+        const config = {
+            "publicKey": "test_public_key_YOUR_KEY",
+            "productIdentity": "nepali_ai_gf_coins",
+            "productName": "Virtual Coins",
+            "productUrl": "http://your-domain.com",
+            "paymentPreference": ["KHALTI"],
+            "eventHandler": {
+                onSuccess(payload) {
+                    const amount = payload.amount / 100; // Convert paisa to NPR
+                    user.coins += amount * 2; // 1 NPR = 2 coins
+                    updateUserData();
+                },
+                onError(error) {
+                    console.log(error);
+                },
+                onClose() {
+                    console.log('widget closed');
+                }
+            }
+        };
+
+        const checkout = new KhaltiCheckout(config);
+
+        // 3D Character Setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Load 3D Model
+        new THREE.GLTFLoader().load('model.glb', (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+            setupCharacterInteractions(model);
+        });
+
+        // Character Interaction System
+        function setupCharacterInteractions(model) {
+            const raycaster = new THREE.Raycaster();
+            const pointer = new THREE.Vector2();
+
+            function onPointerMove(event) {
+                pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+                pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                raycaster.setFromCamera(pointer, camera);
+                const intersects = raycaster.intersectObject(model, true);
+
+                if (intersects.length > 0) {
+                    model.children[0].material.emissive.setHex(0x555555);
+                    speakNepali("के गर्नुहुन्छ?");
+                } else {
+                    model.children[0].material.emissive.setHex(0x000000);
+                }
+            }
+
+            window.addEventListener('pointermove', onPointerMove);
+        }
+
+        // Nepali Speech System
+        function speakNepali(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ne-NP';
+            speechSynthesis.speak(utterance);
+        }
+
+        // Store Functions
+        function showStore() {
+            document.getElementById('store').style.display = 'block';
+        }
+
+        function hideStore() {
+            document.getElementById('store').style.display = 'none';
+        }
+
+        function addCoins() {
+            checkout.show({ amount: 5000 }); // 50 NPR minimum
+        }
+
+        function buyItem(item, cost) {
+            if (user.coins >= cost) {
+                user.coins -= cost;
+                user.happiness += item === 'chocolate' ? 10 : 20;
+                updateUserData();
+                speakNepali(item === 'chocolate' ? "धन्यवाद, मिठो चोकलेट!" : "धेरै धन्यवाद, यो झ्वाला सुन्दर छ!");
+            } else {
+                speakNepali("मसँग पर्याप्त सिक्का छैनन्।");
+            }
+        }
+
+        // User Data Management
+        function updateUserData() {
+            document.getElementById('coin-counter').textContent = user.coins;
+            db.collection('users').doc('current_user').set(user);
+        }
+
+        // Initialize
+        db.collection('users').doc('current_user').onSnapshot((doc) => {
+            if (doc.exists) {
+                user = doc.data();
+                updateUserData();
+            }
+        });
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
